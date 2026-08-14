@@ -701,5 +701,8 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     }, 500);
 });
 
+client.on(Events.GuildMemberAdd, async member => {
+    await updateNickname(member);
+});
 
 client.login(TOKEN);
