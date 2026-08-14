@@ -13,8 +13,15 @@ const client = new Client({
 });
 
 const TOKEN = process.env.DISCORD_TOKEN;
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
     console.log(`Connecté en tant que ${client.user.tag}`);
+
+    const guild = client.guilds.cache.first();
+
+    if (guild) {
+        await guild.members.fetch();
+        console.log("Membres chargés !");
+    }
 });
 
 
@@ -649,6 +656,50 @@ Bienvenue à tous ! Posez vos questions ici.`
 );
 
 
+async function updateNickname(member) {
+    const roles = member.roles.cache
+        .filter(role => role.id !== member.guild.id)
+        .sort((a, b) => b.position - a.position);
+
+    const highestRole = roles.first();
+
+    if (!highestRole) return;
+
+    const roleName = highestRole.name.toUpperCase();
+    const suffix = ` [${roleName}]`;
+
+    // Retirer un éventuel ancien suffixe ajouté par le bot
+    const baseName = member.displayName.replace(/\s*\[[^\]]+\]$/, '');
+
+    const nickname = `${baseName.slice(0, 32 - suffix.length)}${suffix}`;
+
+    // Vérifier que le bot peut modifier ce membre
+    const botMember = member.guild.members.me;
+
+    if (member.roles.highest.position >= botMember.roles.highest.position) {
+        return;
+    }
+
+    await member.setNickname(nickname);
+}
+
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    console.log("GuildMemberUpdate reçu !");
+
+    console.log(
+        "UPDATE :",
+        newMember.user.username,
+        "anciens rôles :",
+        oldMember.roles.cache.map(role => role.name),
+        "nouveaux rôles :",
+        newMember.roles.cache.map(role => role.name)
+    );
+
+    setTimeout(async () => {
+        const member = await newMember.guild.members.fetch(newMember.id);
+        await updateNickname(member);
+    }, 500);
+});
 
 
 client.login(TOKEN);
