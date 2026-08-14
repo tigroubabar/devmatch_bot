@@ -483,7 +483,11 @@ Bienvenue à tous ! Posez vos questions ici.`
 
 
         //supprimer le message
-        await interaction.message.delete();
+        try {
+            await interaction.message.delete();
+        } catch (error) {
+            console.error(error);
+        }
 
         //confirmation
         await interaction.editReply("Projet validé !");
@@ -507,7 +511,11 @@ Bienvenue à tous ! Posez vos questions ici.`
         }
 
         //supprimer le message
-        await interaction.message.delete();
+        try {
+            await interaction.message.delete();
+        } catch (error) {
+            console.error(error);
+        }
 
         //petite confirmation (optionnel)
         await interaction.editReply("Projet supprimé");
@@ -584,10 +592,14 @@ Bienvenue à tous ! Posez vos questions ici.`
         await member.roles.add(memberRole);
 
         // modifier le message
-        await interaction.message.edit({
-            content: `<@${userId}> a été accepté dans le projet **${project.title}** !`,
-            components: [],
-        });
+        try {
+            await interaction.message.edit({
+                content: `<@${userId}> a été accepté dans le projet **${project.title}** !`,
+                components: [],
+            });
+        } catch (error) {
+            console.error(error);
+        }
 
 
         await interaction.editReply("Membre accepté !");
@@ -624,10 +636,14 @@ Bienvenue à tous ! Posez vos questions ici.`
         }
 
         // modifier le message
-        await interaction.message.edit({
-            content: `La demande de <@${userId}> pour rejoindre le projet **${project.title}** a été refusée.`,
-            components: [],
-        });
+        try {
+            await interaction.message.edit({
+                content: `La demande de <@${userId}> pour rejoindre le projet **${project.title}** a été refusée.`,
+                components: [],
+            });
+        } catch (error) {
+            console.error(error);
+        }
     }
 }
 );
