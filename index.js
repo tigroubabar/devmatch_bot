@@ -657,6 +657,9 @@ Bienvenue à tous ! Posez vos questions ici.`
 
 
 async function updateNickname(member) {
+
+    if (member.id === "866958928373743626") return;
+
     const roles = member.roles.cache
         .filter(role => role.id !== member.guild.id)
         .sort((a, b) => b.position - a.position);
