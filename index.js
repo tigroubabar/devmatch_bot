@@ -41,6 +41,7 @@ client.on(Events.InteractionCreate, async interaction => {
             .map(lang => lang.trim())
             .filter(lang => lang.length > 0);
         const difficulty = interaction.options.getString('difficulty');
+        const openSource = interaction.options.getString('open-source');
         const userId = interaction.user.id;
         const ownerUsername = interaction.user.username;
 
@@ -52,6 +53,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     description: description,
                     languages: languagesArray,
                     difficulty: difficulty,
+                    open_source: openSource,
                     owner: userId,
                     owner_username: ownerUsername,
                     members: [userId],
@@ -76,6 +78,7 @@ client.on(Events.InteractionCreate, async interaction => {
         **Description :** ${description}
         **Langages :** ${languagesArray.join(", ")}
         **Owner :** <@${userId}>
+        **Open Source :** ${openSource === 'true' ? 'Oui' : 'Non'}
         **Difficulty :** ${difficulty}`,
 
 
@@ -442,12 +445,13 @@ Utilise-le dès que nécessaire :) `
         });
 
         await generalChannel.send({
-            content: `🚀 **Nouveau projet !**
+            content: `**Nouveau projet !**
 
 **Nom :** ${project.title}
 **Description :** ${project.description}
 **Langages de programmation :** ${project.languages.join(", ")}
 **Difficulté :** ${project.difficulty}
+**Open Source :** ${project.open_source === 'true' ? 'Oui' : 'Non'}
 
 👑 Créateur : <@${project.owner}>
 

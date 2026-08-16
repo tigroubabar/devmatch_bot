@@ -27,6 +27,22 @@ const commands = [
                 required: true
             },
             {
+                name: 'open-source',
+                description: 'Le projet est-il open source ?',
+                type: 3,
+                required: true,
+                choices: [
+                    {
+                        name: 'Oui',
+                        value: 'true'
+                    },
+                    {
+                        name: 'Non',
+                        value: 'false'
+                    }
+                ]
+            },
+            {
                 name: 'difficulty',
                 description: 'Difficulté du projet (débutant, intermédiaire, expert).',
                 type: 3,
