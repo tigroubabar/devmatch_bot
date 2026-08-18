@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const { Client, GatewayIntentBits, Events } = require('discord.js');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { joinVoiceChannel } = require('@discordjs/voice');
 const supabase = require('./supabase');
 
 const client = new Client({
@@ -21,6 +22,19 @@ client.once(Events.ClientReady, async () => {
     if (guild) {
         await guild.members.fetch();
         console.log("Membres chargés !");
+    }
+    const voiceChannel = guild.channels.cache.get("1533839111595622552");
+
+    if (voiceChannel) {
+        joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: guild.id,
+            adapterCreator: guild.voiceAdapterCreator,
+            selfMute: true,
+            selfDeaf: true
+        });
+
+        console.log("Connecté au vocal DevMatch !");
     }
 });
 
