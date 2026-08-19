@@ -35,6 +35,9 @@ client.once(Events.ClientReady, async () => {
         });
 
         console.log("Connecté au vocal DevMatch !");
+
+        await updateProjectsMessage();
+        console.log("Liste des projets actualisée !");
     }
 });
 
@@ -180,6 +183,8 @@ En attente de vérification d'un modérateur.`);
             .from('projects')
             .delete()
             .eq('id', projectId);
+
+        await updateProjectsMessage();
 
         if (deleteError) {
             console.error(deleteError);
@@ -348,6 +353,8 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.editReply("Erreur validation");
         }
 
+        
+
         const { data: project, error: fetchError } = await supabase
             .from('projects')
             .select('*')
@@ -513,6 +520,8 @@ Bienvenue à tous ! Posez vos questions ici.`
         } catch (error) {
             console.error(error);
         }
+        
+        await updateProjectsMessage();
 
         //confirmation
         await interaction.editReply("Projet validé !");
@@ -725,5 +734,49 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 client.on(Events.GuildMemberAdd, async member => {
     await updateNickname(member);
 });
+
+async function updateProjectsMessage() {
+    const channel = await client.channels.fetch("1534900516151103598");
+
+    const { data: projects, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('verified', true)
+        .order('id', { ascending: true });
+
+    if (error) {
+        console.error("Erreur récupération projets :", error);
+        return;
+    }
+
+    let content = "# Projets en cours\n\n";
+
+    if (!projects || projects.length === 0) {
+        content += "Aucun projet en cours pour le moment.";
+    } else {
+        for (const project of projects) {
+            content += `## ${project.title}\n`;
+            content += `**Description :** ${project.description}\n`;
+            content += `**Langages :** ${project.languages.join(", ")}\n`;
+            content += `**Difficulté :** ${project.difficulty}\n`;
+            content += `**Open Source :** ${project.open_source === 'true' ? 'Oui' : 'Non'}\n`;
+            content += `**Créateur :** <@${project.owner}>\n`;
+            content += `**Projet :** \`#${project.id}\`\n\n`;
+        }
+    }
+
+    // Chercher le message existant du bot
+    const messages = await channel.messages.fetch({ limit: 100 });
+
+    const botMessage = messages.find(
+        message => message.author.id === client.user.id
+    );
+
+    if (botMessage) {
+        await botMessage.edit(content);
+    } else {
+        await channel.send(content);
+    }
+}
 
 client.login(TOKEN);
