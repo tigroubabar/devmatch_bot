@@ -690,6 +690,10 @@ client.on(Events.InteractionCreate, async interaction => {
                     id: '1533837255309791313',
                     allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
                 },
+                {
+                    id: '1541436751405514754',
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                },
             ],
         });
 
@@ -731,6 +735,10 @@ Utilise-le dès que nécessaire :) `
                 },
                 {
                     id: '1533837255309791313',
+                    allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+                },
+                {
+                    id: '1541436751405514754',
                     allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
                 },
             ],
