@@ -10,7 +10,11 @@ const supabase = require('./supabase');
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers]
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates,
+    ]
 });
 
 const TOKEN = process.env.DISCORD_TOKEN;
@@ -23,6 +27,46 @@ client.once(Events.ClientReady, async () => {
         await guild.members.fetch();
         console.log("Membres chargés !");
     }
+
+    const { data: users, error } = await supabase
+        .from('users')
+        .select('user_id, points');
+
+    if (error) {
+        console.error("Erreur chargement des points :", error);
+    } else {
+        for (const user of users) {
+            userPoints.set(user.user_id, Number(user.points) || 0);
+        }
+
+        console.log(`${users.length} utilisateurs chargés dans userPoints !`);
+    }
+
+    for (const member of guild.members.cache.values()) {
+        if (member.user.bot) continue;
+
+        const { error } = await supabase
+            .from('users')
+            .upsert(
+                {
+                    user_id: member.id,
+                    points: 0,
+                    messages: 0,
+                    vocal: 0
+                },
+                {
+                    onConflict: 'user_id',
+                    ignoreDuplicates: true
+                }
+            );
+
+        if (error) {
+            console.error(`Erreur ajout ${member.user.username} :`, error);
+        }
+    }
+
+    console.log("Utilisateurs initialisés dans Supabase !");
+
     const voiceChannel = guild.channels.cache.get("1533839111595622552");
 
     if (voiceChannel) {
@@ -38,10 +82,241 @@ client.once(Events.ClientReady, async () => {
 
         await updateProjectsMessage();
         console.log("Liste des projets actualisée !");
+
+
+
+
+
+        console.log("   🟢   Bot chargé   🟢   ")
     }
 });
 
+const messageCounters = new Map();
+const userPoints = new Map();
+const voiceSessions = new Map();
+const voiceCounters = new Map();
+const ranks = [
+    { points: 1, roleId: "1543063273459556452", name: "Bronze 1" },
+    { points: 10, roleId: "1543062968953077841", name: "Bronze 2" },
+    { points: 20, roleId: "1542530060571910164", name: "Bronze 3" },
+    { points: 50, roleId: "1543063327658352681", name: "Silver 1" },
+    { points: 100, roleId: "1543063845835251753", name: "Silver 2" },
+    { points: 150, roleId: "1543063896452235274", name: "Silver 3" },
+    { points: 200, roleId: "1543064192163254302", name: "Gold 1" },
+    { points: 300, roleId: "1543064168935067678", name: "Gold 2" },
+    { points: 400, roleId: "1543064030405726370", name: "Gold 3" },
+    { points: 500, roleId: "1543064941085462548", name: "Légende" }
+];
 
+function getRank(points) {
+    let currentRank = null;
+
+    for (const rank of ranks) {
+        if (points >= rank.points) {
+            currentRank = rank;
+        } else {
+            break;
+        }
+    }
+
+    return currentRank;
+}
+
+async function updateRank(member, points) {
+    const rank = getRank(points);
+
+    if (!rank) return;
+
+    // Récupérer tous les rôles de rang
+    const rankRoleIds = ranks.map(rank => rank.roleId);
+
+    // Retirer les anciens rôles de rang
+    const rolesToRemove = member.roles.cache.filter(
+        role => rankRoleIds.includes(role.id) && role.id !== rank.roleId
+    );
+
+    if (rolesToRemove.size > 0) {
+        await member.roles.remove(rolesToRemove);
+    }
+
+    // Ajouter le nouveau rôle s'il ne l'a pas déjà
+    if (!member.roles.cache.has(rank.roleId)) {
+        await member.roles.add(rank.roleId);
+
+        console.log(
+            `${member.user.username} atteint ${points} points → nouveau rang !`
+        );
+        const rankChannel = member.guild.channels.cache.get(
+            "1543283853836419225"
+        );
+
+        if (rankChannel) {
+            await rankChannel.send(
+                `# 🎉 <@${member.id}> vient de passer **${rank.name}** !
+# Mais quel beau gosse c'est fou ça`
+            );
+        }
+    }
+
+
+}
+
+client.on(Events.VoiceStateUpdate, (oldState, newState) => {
+    const member = newState.member;
+
+    if (!member || member.user.bot) return;
+
+    // Le membre rejoint un vocal
+    if (!oldState.channelId && newState.channelId) {
+        voiceSessions.set(member.id, {
+            joinedAt: Date.now(),
+            pointsEarned: 0
+        });
+
+        console.log(
+            `${member.user.username} a rejoint le vocal.`
+        );
+    }
+
+    // Le membre quitte un vocal
+    if (oldState.channelId && !newState.channelId) {
+        const session = voiceSessions.get(member.id);
+
+        if (!session) return;
+
+        const duration = Date.now() - session.joinedAt;
+        const minutes = Math.floor(duration / 60000);
+
+        voiceSessions.delete(member.id);
+
+        console.log(
+            `${member.user.username} a quitté le vocal après ${minutes} minute(s).`
+        );
+    }
+});
+
+setInterval(async () => {
+    const now = Date.now();
+
+    for (const [userId, session] of voiceSessions) {
+        const elapsedMinutes = Math.floor(
+            (now - session.joinedAt) / 60000
+        );
+
+        const totalVoicePoints = Math.floor(elapsedMinutes / 10);
+
+        if (totalVoicePoints <= session.pointsEarned) continue;
+
+        const pointsToAdd = totalVoicePoints - session.pointsEarned;
+
+        session.pointsEarned = totalVoicePoints;
+
+        const currentPoints = userPoints.get(userId) || 0;
+        const newPoints = currentPoints + pointsToAdd;
+
+        userPoints.set(userId, newPoints);
+
+        voiceCounters.set(
+            userId,
+            (voiceCounters.get(userId) || 0) + pointsToAdd
+        );
+
+        const member = await client.guilds.cache
+            .first()
+            .members.fetch(userId);
+
+        console.log(
+            `${member.user.username} → +${pointsToAdd} point(s) vocal (${elapsedMinutes} min)`
+        );
+
+        await updateRank(member, newPoints);
+    }
+}, 60000);
+
+client.on(Events.MessageCreate, async message => {
+    if (message.author.bot) return;
+
+    const userId = message.author.id;
+
+    messageCounters.set(
+        userId,
+        (messageCounters.get(userId) || 0) + 1
+    );
+
+
+    const newPoints = (userPoints.get(userId) || 0) + 1;
+    userPoints.set(userId, newPoints);
+
+    await updateRank(message.member, newPoints);
+
+    console.log(
+        `${message.author.username} → ${newPoints} points`
+    );
+});
+
+
+setInterval(async () => {
+    if (messageCounters.size === 0) return;
+
+    const countersToSave = new Map(messageCounters);
+
+    messageCounters.clear();
+
+    for (const [userId, count] of countersToSave) {
+        const { error } = await supabase.rpc('add_user_stats', {
+            p_user_id: userId,
+            p_messages: count,
+            p_points: count,
+            p_vocal: 0
+        });
+
+        if (error) {
+            console.error(`Erreur sauvegarde messages de ${userId} :`, error);
+
+            // on remet les messages en mémoire s'ils n'ont pas pu être sauvegardés, 
+            // pour qu'ils puissent être envoyés à la "salve" d'après 
+            messageCounters.set(
+                userId,
+                (messageCounters.get(userId) || 0) + count
+            );
+        }
+    }
+
+    console.log(`Stats messages sauvegardées : ${countersToSave.size} utilisateur(s)`);
+}, 60000);
+
+setInterval(async () => {
+    if (voiceCounters.size === 0) return;
+
+    const countersToSave = new Map(voiceCounters);
+    voiceCounters.clear();
+
+    for (const [userId, count] of countersToSave) {
+        const { error } = await supabase.rpc('add_user_stats', {
+            p_user_id: userId,
+            p_messages: 0,
+            p_points: count,
+            p_vocal: count
+        });
+
+        if (error) {
+            console.error(
+                `Erreur sauvegarde vocal de ${userId} :`,
+                error
+            );
+
+            // On remet les points en mémoire s'ils n'ont pas pu être sauvegardés
+            voiceCounters.set(
+                userId,
+                (voiceCounters.get(userId) || 0) + count
+            );
+        }
+    }
+
+    console.log(
+        `Stats vocal sauvegardées : ${countersToSave.size} utilisateur(s)`
+    );
+}, 60000);
 
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) return;
@@ -152,7 +427,7 @@ En attente de vérification d'un modérateur.`);
 
         // trouver la catégorie
         const category = interaction.guild.channels.cache.find(
-            c => c.name === `Projet-${projectId}` && c.type === 4
+            c => c.name === `#${projectId} - ${project.title}` && c.type === 4
         );
 
         if (category) {
@@ -353,7 +628,7 @@ client.on(Events.InteractionCreate, async interaction => {
             return interaction.editReply("Erreur validation");
         }
 
-        
+
 
         const { data: project, error: fetchError } = await supabase
             .from('projects')
@@ -381,10 +656,12 @@ client.on(Events.InteractionCreate, async interaction => {
             hoist: true
         });
 
-        const first100Role = interaction.guild.roles.cache.get("1534550988067836015");
+        
+        const ownerRoleDelimitation = interaction.guild.roles.cache.get("1543302507680366714");
+        const memberRoleDelimitation = interaction.guild.roles.cache.get("1543302285692633299");
 
-        await ownerRole.setPosition(first100Role.position + 1);
-        await memberRole.setPosition(first100Role.position + 1);
+        await ownerRole.setPosition(ownerRoleDelimitation.position + 1);
+        await memberRole.setPosition(memberRoleDelimitation.position + 1);
 
         await member.roles.add(ownerRole);
         await member.roles.add(memberRole);
@@ -392,7 +669,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
 
         const category = await interaction.guild.channels.create({
-            name: `Projet-${projectId}`,
+            name: `#${projectId} - ${project.title}`,
             type: 4, // GUILD_CATEGORY
         });
 
@@ -520,7 +797,7 @@ Bienvenue à tous ! Posez vos questions ici.`
         } catch (error) {
             console.error(error);
         }
-        
+
         await updateProjectsMessage();
 
         //confirmation
@@ -733,6 +1010,23 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 
 client.on(Events.GuildMemberAdd, async member => {
     await updateNickname(member);
+    if (member.user.bot) return;
+
+    const { error } = await supabase
+        .from('users')
+        .insert({
+            user_id: member.id,
+            points: 0,
+            messages: 0,
+            vocal: 0
+        });
+
+    if (error) {
+        console.error(`Erreur ajout ${member.user.username} :`, error);
+        return;
+    }
+
+    console.log(`${member.user.username} ajouté à la base !`);
 });
 
 async function updateProjectsMessage() {
