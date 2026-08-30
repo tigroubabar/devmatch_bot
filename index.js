@@ -20,6 +20,9 @@ const client = new Client({
 const TOKEN = process.env.DISCORD_TOKEN;
 client.once(Events.ClientReady, async () => {
     console.log(`Connecté en tant que ${client.user.tag}`);
+    client.user.setActivity('devmatch.fr', {
+        type: 0
+    });
 
     const guild = client.guilds.cache.first();
 
@@ -615,6 +618,64 @@ Souhaitez-vous l'accepter comme membre de votre projet ?`,
             `<@${userId}> a été retiré du projet ${projectId}.`
         );
 
+    }
+    if (interaction.commandName === 'stats') {
+        await interaction.deferReply();
+
+        const targetUser = interaction.options.getUser('user') || interaction.user;
+        const userId = targetUser.id;
+
+        const { data: userStats, error } = await supabase
+            .from('users')
+            .select('points, messages, vocal')
+            .eq('user_id', userId)
+            .single();
+
+        if (error || !userStats) {
+            return interaction.editReply(
+                "Impossible de trouver les statistiques de cet utilisateur."
+            );
+        }
+
+        const currentRank = getRank(userStats.points);
+
+        let nextRank = null;
+
+        for (const rank of ranks) {
+            if (rank.points > userStats.points) {
+                nextRank = rank;
+                break;
+            }
+        }
+
+        const vocalMinutes = userStats.vocal * 10;
+        const vocalHours = Math.floor(vocalMinutes / 60);
+        const remainingMinutes = vocalMinutes % 60;
+
+        const vocalTime = vocalHours > 0
+            ? `${vocalHours}h ${remainingMinutes}min`
+            : `${remainingMinutes}min`;
+
+        let progression;
+
+        if (nextRank) {
+            const pointsNeeded = nextRank.points - userStats.points;
+
+            progression =
+                `Prochain rang : **${nextRank.name}**\n` +
+                `Points restants : **${pointsNeeded}**`;
+        } else {
+            progression = `Rang maximum atteint : **Légende**`;
+        }
+
+        await interaction.editReply(
+            `**Statistiques de ${targetUser.username}**\n\n` +
+            `Rang : **${currentRank?.name || 'Aucun'}**\n` +
+            `Points : **${userStats.points}**\n` +
+            `Messages : **${userStats.messages}**\n` +
+            `Temps en vocal : **${vocalTime}**\n\n` +
+            `${progression}`
+        );
     }
 });
 

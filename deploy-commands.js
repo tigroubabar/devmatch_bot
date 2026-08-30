@@ -119,7 +119,19 @@ const commands = [
                 required: true,
             },
         ],
-    }
+    },
+    {
+        name: 'stats',
+        description: 'Afficher les statistiques d’un membre',
+        options: [
+            {
+                name: 'user',
+                type: 6,
+                description: 'Membre dont afficher les statistiques',
+                required: false,
+            },
+        ],
+    },
 ];
 
 const TOKEN = process.env.DISCORD_TOKEN;
