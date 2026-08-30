@@ -150,6 +150,17 @@ async function updateRank(member, points) {
             "1543283853836419225"
         );
 
+        if (rank.roleId === "1543064941085462548") {
+            const generalChannel = member.guild.channels.cache.get(
+                "1533835084141170730"
+            );
+            await generalChannel.send(
+                `# 🎉 <@${member.id}> vient de passer <@&1543064941085462548> !
+C'est le plus haut rang du serveur, donc quelque chose qui se respecte.
+Un tonnerre d'applaudissements pour <@${member.id}> !`
+            );
+        }
+
         if (rankChannel) {
             await rankChannel.send(
                 `# 🎉 <@${member.id}> vient de passer **${rank.name}** !
@@ -656,7 +667,7 @@ client.on(Events.InteractionCreate, async interaction => {
             hoist: true
         });
 
-        
+
         const ownerRoleDelimitation = interaction.guild.roles.cache.get("1543302507680366714");
         const memberRoleDelimitation = interaction.guild.roles.cache.get("1543302285692633299");
 
