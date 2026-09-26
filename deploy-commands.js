@@ -132,6 +132,10 @@ const commands = [
             },
         ],
     },
+    {
+        name: 'classement',
+        description: 'Afficher le classement des membres par points',
+    },
 ];
 
 const TOKEN = process.env.DISCORD_TOKEN;

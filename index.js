@@ -73,12 +73,16 @@ client.once(Events.ClientReady, async () => {
     const voiceChannel = guild.channels.cache.get("1533839111595622552");
 
     if (voiceChannel) {
-        joinVoiceChannel({
+        const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
             guildId: guild.id,
             adapterCreator: guild.voiceAdapterCreator,
             selfMute: true,
             selfDeaf: true
+        });
+
+        connection.on('error', error => {
+            console.error('Erreur connexion vocale :', error);
         });
 
         console.log("Connecté au vocal DevMatch !");
@@ -641,6 +645,10 @@ Souhaitez-vous l'accepter comme membre de votre projet ?`,
 
         let nextRank = null;
 
+        //const vocalMinutes = userStats.vocal * 10;
+        //const vocalHours = Math.floor(vocalMinutes / 60);
+        //const remainingMinutes = vocalMinutes % 60;
+
         for (const rank of ranks) {
             if (rank.points > userStats.points) {
                 nextRank = rank;
@@ -648,9 +656,13 @@ Souhaitez-vous l'accepter comme membre de votre projet ?`,
             }
         }
 
+
         const vocalMinutes = userStats.vocal * 10;
         const vocalHours = Math.floor(vocalMinutes / 60);
-        const remainingMinutes = vocalMinutes % 60;
+        const remainingMinutes = vocalMinutes / 60;
+
+
+
 
         const vocalTime = vocalHours > 0
             ? `${vocalHours}h ${remainingMinutes}min`
@@ -676,6 +688,90 @@ Souhaitez-vous l'accepter comme membre de votre projet ?`,
             `Temps en vocal : **${vocalTime}**\n\n` +
             `${progression}`
         );
+    }
+    if (interaction.commandName === 'classement') {
+        await interaction.deferReply();
+
+        const { data: users, error } = await supabase
+            .from('users')
+            .select('user_id, points')
+            .order('points', { ascending: false });
+
+        if (error) {
+            console.error('Erreur classement :', error);
+
+            return interaction.editReply(
+                "Impossible de récupérer le classement."
+            );
+        }
+
+        if (!users || users.length === 0) {
+            return interaction.editReply(
+                "Aucune statistique n'est encore disponible."
+            );
+        }
+
+        const classement = await Promise.all(
+            users.slice(0, 10).map(async (user, index) => {
+
+                const member = await interaction.guild.members
+                    .fetch(user.user_id)
+                    .catch(() => null);
+
+                const username = member
+                    ? member.user.username
+                    : 'Inconnu';
+
+                const rank = getRank(user.points);
+
+                return {
+                    position: index + 1,
+                    userId: user.user_id,
+                    username,
+                    rank: rank?.name || 'Aucun',
+                    points: user.points
+                };
+            })
+        );
+
+        // Largeurs des colonnes
+        const memberWidth = Math.max(
+            18,
+            ...classement.map(user => user.username.length)
+        );
+
+        const rankWidth = Math.max(
+            13,
+            ...classement.map(user => user.rank.length)
+        );
+
+        const lines = classement.map(user => {
+            const position = String(user.position).padStart(2);
+            const username = user.username.padEnd(memberWidth);
+            const rank = user.rank.padEnd(rankWidth);
+            const points = String(user.points).padStart(6);
+
+            return `${position}   ${username}   ${rank}   ${points}`;
+        });
+
+        const header =
+            ` #   ${'MEMBRE'.padEnd(memberWidth)}   ` +
+            `${'RANG'.padEnd(rankWidth)}   POINTS`;
+
+        const separator = '─'.repeat(header.length);
+
+
+
+        await interaction.editReply({
+            content:
+                `\`\`\`\n` +
+                `${header}\n` +
+                `${separator}\n` +
+                `${lines.join('\n')}\n` +
+                `\`\`\`\n`,
+
+
+        });
     }
 });
 
@@ -1086,6 +1182,47 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
         const member = await newMember.guild.members.fetch(newMember.id);
         await updateNickname(member);
     }, 500);
+
+
+    const SPEAKER_ROLE_ID = "1544426701600202792";
+    const CONFERENCE_VOICE_ID = "1544421370329301013";
+
+    const hadSpeaker = oldMember.roles.cache.has(SPEAKER_ROLE_ID);
+    const hasSpeaker = newMember.roles.cache.has(SPEAKER_ROLE_ID);
+
+    if (hadSpeaker !== hasSpeaker) {
+        const voiceChannel = newMember.voice.channel;
+
+        if (voiceChannel && voiceChannel.id === CONFERENCE_VOICE_ID) {
+            const generalChannel = newMember.guild.channels.cache.get(
+                "1533835084141170731"
+            );
+
+            if (!generalChannel) {
+                console.error("Vocal général introuvable.");
+                return;
+            }
+
+            await newMember.voice.setChannel(generalChannel);
+
+            setTimeout(async () => {
+                try {
+                    await newMember.voice.setChannel(CONFERENCE_VOICE_ID);
+
+                    console.log(
+                        `${newMember.user.username} a été déplacé Général → Conférence.`
+                    );
+                } catch (error) {
+                    console.error(
+                        `Impossible de remettre ${newMember.user.username} en conférence :`,
+                        error
+                    );
+                }
+            }, 300);
+        }
+    }
+
+
 });
 
 client.on(Events.GuildMemberAdd, async member => {
