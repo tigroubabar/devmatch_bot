@@ -136,6 +136,18 @@ const commands = [
         name: 'classement',
         description: 'Afficher le classement des membres par points',
     },
+    {
+        name: 'ask',
+        description: 'Pose une question sur DevMatch',
+        options: [
+            {
+                name: 'question',
+                type: 3,
+                description: 'La question à poser',
+                required: true,
+            },
+        ],
+    },
 ];
 
 const TOKEN = process.env.DISCORD_TOKEN;
