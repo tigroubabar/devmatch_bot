@@ -29,6 +29,9 @@ client.once(Events.ClientReady, async () => {
     if (guild) {
         await guild.members.fetch();
         console.log("Membres chargés !");
+    } else {
+        console.error("Aucun serveur Discord disponible pour synchroniser les membres.");
+        return;
     }
 
     const { data: users, error } = await supabase
@@ -45,6 +48,17 @@ client.once(Events.ClientReady, async () => {
         console.log(`${users.length} utilisateurs chargés dans userPoints !`);
     }
 
+    const { error: resetPresenceError } = await supabase
+        .from('users')
+        .update({ on_server: false })
+        .not('user_id', 'is', null);
+
+    if (resetPresenceError) {
+        console.error("Erreur réinitialisation de la présence des utilisateurs :", resetPresenceError);
+    }
+
+    const memberIds = [];
+
     for (const member of guild.members.cache.values()) {
         if (member.user.bot) continue;
 
@@ -55,7 +69,8 @@ client.once(Events.ClientReady, async () => {
                     user_id: member.id,
                     points: 0,
                     messages: 0,
-                    vocal: 0
+                    vocal: 0,
+                    on_server: true
                 },
                 {
                     onConflict: 'user_id',
@@ -65,6 +80,19 @@ client.once(Events.ClientReady, async () => {
 
         if (error) {
             console.error(`Erreur ajout ${member.user.username} :`, error);
+        } else {
+            memberIds.push(member.id);
+        }
+    }
+
+    for (let i = 0; i < memberIds.length; i += 100) {
+        const { error } = await supabase
+            .from('users')
+            .update({ on_server: true })
+            .in('user_id', memberIds.slice(i, i + 100));
+
+        if (error) {
+            console.error("Erreur mise à jour de la présence des membres :", error);
         }
     }
 
@@ -1368,11 +1396,15 @@ client.on(Events.GuildMemberAdd, async member => {
 
     const { error } = await supabase
         .from('users')
-        .insert({
+        .upsert({
             user_id: member.id,
             points: 0,
             messages: 0,
-            vocal: 0
+            vocal: 0,
+            on_server: true
+        }, {
+            onConflict: 'user_id',
+            ignoreDuplicates: true
         });
 
     if (error) {
@@ -1380,7 +1412,33 @@ client.on(Events.GuildMemberAdd, async member => {
         return;
     }
 
+    const { error: presenceError } = await supabase
+        .from('users')
+        .update({ on_server: true })
+        .eq('user_id', member.id);
+
+    if (presenceError) {
+        console.error(`Erreur mise à jour de la présence de ${member.user.username} :`, presenceError);
+        return;
+    }
+
     console.log(`${member.user.username} ajouté à la base !`);
+});
+
+client.on(Events.GuildMemberRemove, async member => {
+    if (member.user.bot) return;
+
+    const { error } = await supabase
+        .from('users')
+        .update({ on_server: false })
+        .eq('user_id', member.id);
+
+    if (error) {
+        console.error(`Erreur mise à jour du départ de ${member.user.username} :`, error);
+        return;
+    }
+
+    console.log(`${member.user.username} a quitté le serveur.`);
 });
 
 
